@@ -58,7 +58,8 @@ fn handle_connection(mut stream: TcpStream) {
     let response = match request_context.path.as_str() {
         p if p.contains("/echo") => handle_echo(request_context),
         p if p.contains("/user-agent") => handle_user_agent(request_context),
-        p if p.contains("/files") => file_get(request_context),
+        p if p.contains("/files") && request_context.method == "GET" => file_get(request_context),
+        p if p.contains("/files") && request_context.method == "POST" => file_get(request_context),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
@@ -67,13 +68,8 @@ fn handle_connection(mut stream: TcpStream) {
 }
 
 fn file_get(request: RequestContext) -> String {
-    let args = env::args().collect::<Vec<String>>();
-    let directory = args.iter()
-        .skip(1)
-        .skip_while(|a| a.contains("--directory"))
-        .next()
-        .unwrap();
 
+    let directory = get_args_value("directory");
     let file_name = request.path_params[0].as_str();
 
     match File::open(format!("{}/{}", directory, file_name)) {
@@ -115,6 +111,16 @@ fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -
             }
         }
     }
+}
+
+fn get_args_value(arg_label: &str) -> String {
+    let args = env::args().collect::<Vec<String>>();
+    args.iter()
+        .skip(1)
+        .skip_while(|a| a.contains(format!("--{}", arg_label).as_str()))
+        .next()
+        .unwrap()
+        .to_string()
 }
 
 fn get_current_time_str() -> String {
