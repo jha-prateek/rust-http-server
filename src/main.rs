@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, thread};
 // Uncomment this block to pass the first stage
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{BufReader, prelude::*};
@@ -19,7 +19,9 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(_stream) => {
-                handle_connection(_stream);
+                thread::spawn(|| {
+                    handle_connection(_stream);
+                });
             }
             Err(e) => {
                 println!("error: {}", e);
@@ -58,6 +60,7 @@ fn handle_connection(mut stream: TcpStream) {
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
     stream.write_all(response.as_bytes()).unwrap();
+    stream.flush().unwrap();
 }
 
 fn handle_user_agent(headers: HashMap<String, String>) -> String {
