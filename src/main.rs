@@ -59,7 +59,7 @@ fn handle_connection(mut stream: TcpStream) {
         p if p.contains("/echo") => handle_echo(request_context),
         p if p.contains("/user-agent") => handle_user_agent(request_context),
         p if p.contains("/files") && request_context.method == "GET" => file_get(request_context),
-        p if p.contains("/files") && request_context.method == "POST" => file_get(request_context),
+        p if p.contains("/files") && request_context.method == "POST" => file_post(request_context),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
@@ -67,20 +67,27 @@ fn handle_connection(mut stream: TcpStream) {
     stream.flush().unwrap();
 }
 
+fn file_post(request: RequestContext) -> String {
+    prepare_response(HttpStatus::Created, ContentType::Unknown, "")
+}
+
 fn file_get(request: RequestContext) -> String {
 
     let directory = get_args_value("directory");
-    let file_name = request.path_params[0].as_str();
 
-    match File::open(format!("{}/{}", directory, file_name)) {
-        Ok(mut file) => {
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).unwrap();
-            prepare_response(HttpStatus::Ok, ContentType::OctetStream, contents.as_str())
+    if directory.is_empty().not()
+        && request.path_params.is_empty().not()
+        && request.path_params[0].to_string().is_empty().not() {
+        match File::open(format!("{}/{}", directory, request.path_params[0])) {
+            Ok(mut file) => {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents).unwrap();
+                prepare_response(HttpStatus::Ok, ContentType::OctetStream, contents.as_str())
+            }
+            Err(_) => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
         }
-        Err(_) => {
-            prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
-        }
+    } else {
+        prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     }
 }
 
@@ -104,23 +111,21 @@ fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -
                 body
             )
         }
-        ContentType::Unknown => {
-            match status {
-                HttpStatus::Ok => format!("HTTP/1.1 200 OK\r\n\r\n"),
-                HttpStatus::NotFound => format!("HTTP/1.1 404 Not Found\r\n\r\n")
-            }
-        }
+        ContentType::Unknown => format!("HTTP/1.1 {}\r\n\r\n", status)
     }
 }
 
 fn get_args_value(arg_label: &str) -> String {
     let args = env::args().collect::<Vec<String>>();
-    args.iter()
+    let arg_value = args.iter()
         .skip(1)
         .skip_while(|a| a.contains(format!("--{}", arg_label).as_str()))
-        .next()
-        .unwrap()
-        .to_string()
+        .next();
+
+    match arg_value {
+        None => "".to_string(),
+        Some(a) => a.to_string()
+    }
 }
 
 fn get_current_time_str() -> String {
@@ -199,6 +204,7 @@ impl fmt::Display for ContentType {
 #[derive(Debug, Clone, Copy)]
 enum HttpStatus {
     Ok,
+    Created,
     NotFound
 }
 
@@ -206,6 +212,7 @@ impl fmt::Display for HttpStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             HttpStatus::Ok => write!(f, "200 OK"),
+            HttpStatus::Created => write!(f, "201 Created"),
             HttpStatus::NotFound => write!(f, "404 Not Found")
         }
     }
