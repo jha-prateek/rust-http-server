@@ -47,33 +47,13 @@ fn handle_connection_raw(mut stream: TcpStream) {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let mut buffered_reader = BufReader::new(&stream);
-    let incoming_request_vec = buffered_reader.lines()
-        .map(|line| line.unwrap())
-        .take_while(|line| line.is_empty().not())
-        .collect::<Vec<_>>();
+    let request_context = RequestContext::prepare_request(&stream);
 
-    let start_line = incoming_request_vec[0].split_whitespace().collect::<Vec<&str>>();
-    let method = start_line[0];
-    let path = start_line[1];
-    let version = start_line[2];
+    println!("[{:?}] {}", get_current_time_str(), request_context.request_info());
 
-    let mut headers: HashMap<String, String> = HashMap::new();
-    incoming_request_vec
-        .iter()
-        .skip(1)
-        .for_each(|line| {
-            let parts = line.split(": ").map(|p| p.trim()).collect::<Vec<&str>>();
-            let key = parts[0];
-            let value = parts[1];
-            headers.insert(key.to_string(), value.to_string());
-        });
-
-    println!("[{:?}] {}", get_current_time_str(), start_line.iter().join(" "));
-
-    let response = match path {
+    let response = match request_context.path.as_str() {
         p if p.contains("/echo") => handle_echo(p),
-        p if p.contains("user-agent") => handle_user_agent(headers),
+        p if p.contains("/user-agent") => handle_user_agent(request_context.headers),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
@@ -102,23 +82,59 @@ fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -
         }
         ContentType::Unknown => {
             match status {
-                HttpStatus::Ok => prepare_ok(),
-                HttpStatus::NotFound => prepare_404()
+                HttpStatus::Ok => format!("HTTP/1.1 200 OK\r\n\r\n"),
+                HttpStatus::NotFound => format!("HTTP/1.1 404 Not Found\r\n\r\n")
             }
         }
     }
 }
 
-fn prepare_ok() -> String {
-    format!("HTTP/1.1 200 OK\r\n\r\n")
-}
-
-fn prepare_404() -> String {
-    format!("HTTP/1.1 404 Not Found\r\n\r\n")
-}
-
 fn get_current_time_str() -> String {
     format!("{}", Local::now().format("%d/%m/%Y %H:%M:%S"))
+}
+
+struct RequestContext {
+    method: String,
+    path: String,
+    version: String,
+    headers: HashMap<String, String>
+}
+
+impl RequestContext {
+    fn prepare_request(stream: &TcpStream) -> RequestContext {
+        let mut buffered_reader = BufReader::new(stream);
+        let incoming_request_vec = buffered_reader.lines()
+            .map(|line| line.unwrap())
+            .take_while(|line| line.is_empty().not())
+            .collect::<Vec<_>>();
+
+        let start_line = incoming_request_vec[0].split_whitespace().collect::<Vec<&str>>();
+        let method = start_line[0].to_string();
+        let path = start_line[1].to_string();
+        let version = start_line[2].to_string();
+
+        let mut headers: HashMap<String, String> = HashMap::new();
+        incoming_request_vec
+            .iter()
+            .skip(1)
+            .for_each(|line| {
+                let parts = line.split(": ").map(|p| p.trim()).collect::<Vec<&str>>();
+                let key = parts[0];
+                let value = parts[1];
+                headers.insert(key.to_string(), value.to_string());
+            });
+
+        RequestContext {
+            method,
+            path,
+            version,
+            headers
+        }
+    }
+
+    fn request_info(&self) -> String {
+        format!("{} {} {}", self.method, self.path, self.version)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
