@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::fmt;
 // Uncomment this block to pass the first stage
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{BufReader, prelude::*};
+use std::ops::Not;
 use std::str::from_utf8;
 use chrono::Local;
+use itertools::Itertools;
 
 fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -16,7 +19,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(_stream) => {
-                handle_connection_neat(_stream);
+                handle_connection(_stream);
             }
             Err(e) => {
                 println!("error: {}", e);
@@ -43,23 +46,47 @@ fn handle_connection_raw(mut stream: TcpStream) {
     stream.shutdown(Shutdown::Both).expect("TODO: panic message");
 }
 
-fn handle_connection_neat(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream) {
     let mut buffered_reader = BufReader::new(&stream);
-    let mut incoming_request_string = String::new();
-    buffered_reader.read_line(&mut incoming_request_string).unwrap();
-    let request_parts: Vec<&str> = incoming_request_string.split_whitespace().collect();
-    request_parts[0];
-    let path = request_parts[1];
-    println!("[{:?}] {}", get_current_time_str(), incoming_request_string);
+    let incoming_request_vec = buffered_reader.lines()
+        .map(|line| line.unwrap())
+        .take_while(|line| line.is_empty().not())
+        .collect::<Vec<_>>();
+
+    let start_line = incoming_request_vec[0].split_whitespace().collect::<Vec<&str>>();
+    let method = start_line[0];
+    let path = start_line[1];
+    let version = start_line[2];
+
+    let mut headers: HashMap<String, String> = HashMap::new();
+    incoming_request_vec
+        .iter()
+        .skip(1)
+        .for_each(|line| {
+            let parts = line.split(": ").map(|p| p.trim()).collect::<Vec<&str>>();
+            let key = parts[0];
+            let value = parts[1];
+            headers.insert(key.to_string(), value.to_string());
+        });
+
+    println!("[{:?}] {}", get_current_time_str(), start_line.iter().join(" "));
+
     let response = match path {
-        p if p.contains("/echo") => {
-            let body = p.strip_prefix("/echo/").unwrap();
-            prepare_response(HttpStatus::Ok, ContentType::TextPlain, body)
-        }
+        p if p.contains("/echo") => handle_echo(p),
+        p if p.contains("user-agent") => handle_user_agent(headers),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
     stream.write_all(response.as_bytes()).unwrap();
+}
+
+fn handle_user_agent(headers: HashMap<String, String>) -> String {
+    prepare_response(HttpStatus::Ok, ContentType::TextPlain, headers.get("User-Agent").unwrap())
+}
+
+fn handle_echo(path: &str) -> String {
+    let body = path.strip_prefix("/echo/").unwrap();
+    prepare_response(HttpStatus::Ok, ContentType::TextPlain, body)
 }
 
 fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -> String {
