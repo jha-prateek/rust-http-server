@@ -180,7 +180,9 @@ impl RequestContext {
             .map(|b| b.to_string())
             .collect::<Vec<_>>();
 
-        let body = request_parts[1][0].to_string();
+        let body = if request_parts[1].is_empty().not() {
+            request_parts[1][0].to_string()
+        } else { String::from("") };
 
         let start_line = header_parts[0].split_whitespace().collect::<Vec<&str>>();
         let method = start_line[0].to_string();
