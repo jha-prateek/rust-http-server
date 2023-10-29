@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use std::{fmt, thread};
+use std::{env, fmt, thread};
+use std::fmt::write;
+use std::fs::File;
 // Uncomment this block to pass the first stage
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{BufReader, prelude::*};
@@ -54,8 +56,9 @@ fn handle_connection(mut stream: TcpStream) {
     println!("[{:?}] {}", get_current_time_str(), request_context.request_info());
 
     let response = match request_context.path.as_str() {
-        p if p.contains("/echo") => handle_echo(p),
-        p if p.contains("/user-agent") => handle_user_agent(request_context.headers),
+        p if p.contains("/echo") => handle_echo(request_context),
+        p if p.contains("/user-agent") => handle_user_agent(request_context),
+        p if p.contains("/files") => file_get(request_context),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
@@ -63,18 +66,40 @@ fn handle_connection(mut stream: TcpStream) {
     stream.flush().unwrap();
 }
 
-fn handle_user_agent(headers: HashMap<String, String>) -> String {
-    prepare_response(HttpStatus::Ok, ContentType::TextPlain, headers.get("User-Agent").unwrap())
+fn file_get(request: RequestContext) -> String {
+    let args = env::args().collect::<Vec<String>>();
+    let directory = args.iter()
+        .skip(1)
+        .skip_while(|a| a.contains("--directory"))
+        .next()
+        .unwrap();
+
+    let file_name = request.path_params[0].as_str();
+
+    match File::open(format!("{}/{}", directory, file_name)) {
+        Ok(mut file) => {
+            let mut contents = String::new();
+            file.read_to_string(&mut contents).unwrap();
+            prepare_response(HttpStatus::Ok, ContentType::OctetStream, contents.as_str())
+        }
+        Err(_) => {
+            prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
+        }
+    }
 }
 
-fn handle_echo(path: &str) -> String {
-    let body = path.strip_prefix("/echo/").unwrap();
+fn handle_user_agent(request: RequestContext) -> String {
+    prepare_response(HttpStatus::Ok, ContentType::TextPlain, request.headers.get("User-Agent").unwrap())
+}
+
+fn handle_echo(request: RequestContext) -> String {
+    let body = request.path.strip_prefix("/echo/").unwrap();
     prepare_response(HttpStatus::Ok, ContentType::TextPlain, body)
 }
 
 fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -> String {
     match content_type {
-        ContentType::TextPlain => {
+        ContentType::TextPlain | ContentType::OctetStream => {
             format!(
                 "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
                 status,
@@ -99,6 +124,7 @@ fn get_current_time_str() -> String {
 struct RequestContext {
     method: String,
     path: String,
+    path_params: Vec<String>,
     version: String,
     headers: HashMap<String, String>
 }
@@ -116,6 +142,12 @@ impl RequestContext {
         let path = start_line[1].to_string();
         let version = start_line[2].to_string();
 
+        let path_params = path.strip_prefix("/").unwrap()
+            .split("/")
+            .skip(1)
+            .map(|p| p.to_string())
+            .collect::<Vec<String>>();
+
         let mut headers: HashMap<String, String> = HashMap::new();
         incoming_request_vec
             .iter()
@@ -130,6 +162,7 @@ impl RequestContext {
         RequestContext {
             method,
             path,
+            path_params,
             version,
             headers
         }
@@ -143,6 +176,7 @@ impl RequestContext {
 #[derive(Debug, Clone, Copy)]
 enum ContentType {
     TextPlain,
+    OctetStream,
     Unknown
 }
 
@@ -150,7 +184,8 @@ impl fmt::Display for ContentType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ContentType::TextPlain => write!(f, "text/plain"),
-            ContentType::Unknown => write!(f, "")
+            ContentType::OctetStream => write!(f, "application/octet-stream"),
+            ContentType::Unknown => write!(f, ""),
         }
     }
 }
