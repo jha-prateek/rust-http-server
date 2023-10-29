@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::{env, fmt, thread};
-use std::fmt::write;
 use std::fs::File;
 // Uncomment this block to pass the first stage
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::io::{BufReader, prelude::*};
+use std::io::{prelude::*};
 use std::ops::Not;
 use std::str::from_utf8;
 use chrono::Local;
@@ -68,7 +67,27 @@ fn handle_connection(mut stream: TcpStream) {
 }
 
 fn file_post(request: RequestContext) -> String {
-    prepare_response(HttpStatus::Created, ContentType::Unknown, "")
+    let directory = get_args_value("directory");
+
+    if directory.is_empty().not()
+        && request.path_params.is_empty().not()
+        && request.path_params[0].to_string().is_empty().not() {
+
+        let abs_path = format!("{}/{}", directory, request.path_params[0]);
+
+        let mut file = File::create(abs_path);
+        match file {
+            Ok(mut f) => {
+                match f.write_all(request.body.as_bytes()) {
+                    Ok(_) => prepare_response(HttpStatus::Created, ContentType::Unknown, ""),
+                    Err(_) => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
+                }
+            }
+            Err(_) => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
+        }
+    } else {
+        prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
+    }
 }
 
 fn file_get(request: RequestContext) -> String {
