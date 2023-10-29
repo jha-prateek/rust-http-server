@@ -51,7 +51,7 @@ fn handle_connection_raw(mut stream: TcpStream) {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let request_context = RequestContext::prepare_request(&stream);
+    let request_context = RequestContext::prepare_request(&mut stream);
 
     println!("[{:?}] {}", get_current_time_str(), request_context.request_info());
 
@@ -137,18 +137,33 @@ struct RequestContext {
     path: String,
     path_params: Vec<String>,
     version: String,
-    headers: HashMap<String, String>
+    headers: HashMap<String, String>,
+    body: String
 }
 
 impl RequestContext {
-    fn prepare_request(stream: &TcpStream) -> RequestContext {
-        let mut buffered_reader = BufReader::new(stream);
-        let incoming_request_vec = buffered_reader.lines()
-            .map(|line| line.unwrap())
-            .take_while(|line| line.is_empty().not())
+    fn prepare_request(mut stream: &TcpStream) -> RequestContext {
+        // let mut buffered_reader = BufReader::new(stream);
+        // let incoming_request_vec = buffered_reader.lines()
+        //     .map(|line| line.unwrap())
+        //     .take_while(|line| line.is_empty().not())
+        //     .collect::<Vec<_>>();
+
+        let read_buffer = &mut [0u8; 1024];
+        stream.read(read_buffer).expect("Unable to read stream");
+        let request = from_utf8(read_buffer).unwrap().trim_matches(char::from(0));
+        let request_parts= request
+            .split("\r\n\r\n").map(|a| a.lines().collect::<Vec<_>>())
             .collect::<Vec<_>>();
 
-        let start_line = incoming_request_vec[0].split_whitespace().collect::<Vec<&str>>();
+        let header_parts = request_parts[0]
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>();
+
+        let body = request_parts[1][0].to_string();
+
+        let start_line = header_parts[0].split_whitespace().collect::<Vec<&str>>();
         let method = start_line[0].to_string();
         let path = start_line[1].to_string();
         let version = start_line[2].to_string();
@@ -160,7 +175,7 @@ impl RequestContext {
             .collect::<Vec<String>>();
 
         let mut headers: HashMap<String, String> = HashMap::new();
-        incoming_request_vec
+        header_parts
             .iter()
             .skip(1)
             .for_each(|line| {
@@ -175,7 +190,8 @@ impl RequestContext {
             path,
             path_params,
             version,
-            headers
+            headers,
+            body
         }
     }
 
