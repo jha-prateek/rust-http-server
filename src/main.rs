@@ -54,21 +54,32 @@ fn handle_connection_neat(mut stream: TcpStream) {
     let response = match path {
         p if p.contains("/echo") => {
             let body = p.strip_prefix("/echo/").unwrap();
-            prepare_response(ContentType::TextPlain, body)
+            prepare_response(HttpStatus::Ok, ContentType::TextPlain, body)
         }
-        "/" => prepare_ok(),
-        _ => prepare_404()
+        "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
+        _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
     stream.write_all(response.as_bytes()).unwrap();
 }
 
-fn prepare_response(content_type: ContentType, body: &str) -> String {
-    format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
-        content_type,
-        body.len(),
-        body
-    )
+fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -> String {
+    match content_type {
+        ContentType::TextPlain => {
+            format!(
+                "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+                status,
+                content_type,
+                body.len(),
+                body
+            )
+        }
+        ContentType::Unknown => {
+            match status {
+                HttpStatus::Ok => prepare_ok(),
+                HttpStatus::NotFound => prepare_404()
+            }
+        }
+    }
 }
 
 fn prepare_ok() -> String {
@@ -85,13 +96,30 @@ fn get_current_time_str() -> String {
 
 #[derive(Debug, Clone, Copy)]
 enum ContentType {
-    TextPlain
+    TextPlain,
+    Unknown
 }
 
 impl fmt::Display for ContentType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ContentType::TextPlain => write!(f, "text/plain")
+            ContentType::TextPlain => write!(f, "text/plain"),
+            ContentType::Unknown => write!(f, "")
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum HttpStatus {
+    Ok,
+    NotFound
+}
+
+impl fmt::Display for HttpStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HttpStatus::Ok => write!(f, "200 OK"),
+            HttpStatus::NotFound => write!(f, "404 Not Found")
         }
     }
 }
