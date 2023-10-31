@@ -5,9 +5,8 @@ use std::{env, thread};
 use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 use std::io::{prelude::*};
-use chrono::Local;
 use crate::http_request::RequestContext;
-use crate::http_utils::{ContentType, HttpStatus, prepare_response};
+use crate::http_utils::{ContentType, get_current_time_str, HttpStatus, log_error, prepare_response};
 
 fn main() {
     let port = "4222";
@@ -31,8 +30,7 @@ fn main() {
 
 fn handle_connection(mut stream: TcpStream) {
     let request_context = RequestContext::prepare_request(&mut stream);
-    let current_time = format!("{}", Local::now().format("%d/%m/%Y %H:%M:%S"));
-    println!("[{}] {}", current_time, request_context.request_info());
+    println!("[{}] {}", get_current_time_str(), request_context.request_info());
 
     let response = match request_context.path.as_str() {
         p if p.contains("/echo") => handle_echo(request_context),
@@ -56,11 +54,11 @@ fn file_post(request: RequestContext) -> String {
 
     let response: Result<_, String> = if directory.is_empty() {
         let e_msg = format!("argument --directory not found");
-        eprintln!("{}", e_msg);
+        log_error(&e_msg);
         Err(e_msg)
     } else if request.path_params.is_empty() || request.path_params[0].to_string().is_empty() {
         let e_msg = format!("file name not found");
-        eprintln!("{}", e_msg);
+        log_error(&e_msg);
         Err(e_msg)
     } else {
         let abs_path = format!("{}/{}", directory, request.path_params[0]);
@@ -71,14 +69,14 @@ fn file_post(request: RequestContext) -> String {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         let e_msg = format!("Error while writing file: {}", e);
-                        eprintln!("{}", e_msg);
+                        log_error(&e_msg);
                         Err(e_msg)
                     }
                 }
             }
             Err(e) => {
                 let e_msg = format!("Error: {}", e);
-                eprintln!("{}", e_msg);
+                log_error(&e_msg);
                 Err(e_msg)
             }
         }
@@ -100,11 +98,11 @@ fn file_get(request: RequestContext) -> String {
 
     let response: Result<String, String> = if directory.is_empty() {
         let e_msg = format!("argument --directory not found");
-        eprintln!("{}", e_msg);
+        log_error(&e_msg);
         Err(e_msg)
     } else if request.path_params.is_empty() || request.path_params[0].to_string().is_empty() {
         let e_msg = format!("file name not found");
-        eprintln!("{}", e_msg);
+        log_error(&e_msg);
         Err(e_msg)
     } else {
         match File::open(format!("{}/{}", directory, request.path_params[0])) {
@@ -115,7 +113,7 @@ fn file_get(request: RequestContext) -> String {
             }
             Err(e) => {
                 let e_msg = format!("Error: {}", e);
-                eprintln!("{}", e_msg);
+                log_error(&e_msg);
                 Err(e_msg)
             }
         }
@@ -152,7 +150,7 @@ fn get_args_value(arg_label: &str) -> Result<String, String> {
     match arg_value {
         None => {
             let e_msg = format!("argument --directory not found");
-            eprintln!("{}", e_msg);
+            log_error(&e_msg);
             Err(e_msg)
         }
         Some(a) => Ok(a.to_string())

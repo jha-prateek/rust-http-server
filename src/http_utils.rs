@@ -1,4 +1,5 @@
 use std::fmt;
+use chrono::Local;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ContentType {
@@ -49,4 +50,12 @@ pub fn prepare_response(status: HttpStatus, content_type: ContentType, body: &st
         }
         ContentType::Unknown => format!("HTTP/1.1 {}\r\n\r\n", status)
     }
+}
+
+pub fn log_error(msg: &str) {
+    eprintln!("[{}] {}", get_current_time_str(), msg)
+}
+
+pub fn get_current_time_str() -> String {
+    format!("{}", Local::now().format("%d/%m/%Y %H:%M:%S"))
 }
