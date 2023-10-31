@@ -8,8 +8,6 @@ use std::io::{prelude::*};
 use chrono::Local;
 use crate::http_request::RequestContext;
 use crate::http_utils::{ContentType, HttpStatus, prepare_response};
-use crate::http_utils::ContentType::TextPlain;
-use crate::http_utils::HttpStatus::BadRequest;
 
 fn main() {
     let port = "4222";
@@ -52,7 +50,7 @@ fn file_post(request: RequestContext) -> String {
     let directory = match get_args_value("directory") {
         Ok(d) => d,
         Err(e) => {
-            return prepare_response(BadRequest, TextPlain, e.as_str())
+            return prepare_response(HttpStatus::BadRequest, ContentType::TextPlain, e.as_str())
         }
     };
 
@@ -96,7 +94,7 @@ fn file_get(request: RequestContext) -> String {
     let directory = match get_args_value("directory") {
         Ok(d) => d,
         Err(e) => {
-            return prepare_response(BadRequest, TextPlain, e.as_str())
+            return prepare_response(HttpStatus::BadRequest, ContentType::TextPlain, e.as_str())
         }
     };
 
