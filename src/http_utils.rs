@@ -21,7 +21,8 @@ impl fmt::Display for ContentType {
 pub enum HttpStatus {
     Ok,
     Created,
-    NotFound
+    NotFound,
+    BadRequest
 }
 
 impl fmt::Display for HttpStatus {
@@ -29,7 +30,23 @@ impl fmt::Display for HttpStatus {
         match self {
             HttpStatus::Ok => write!(f, "200 OK"),
             HttpStatus::Created => write!(f, "201 Created"),
-            HttpStatus::NotFound => write!(f, "404 Not Found")
+            HttpStatus::NotFound => write!(f, "404 Not Found"),
+            HttpStatus::BadRequest => write!(f, "400 Bad Request")
         }
+    }
+}
+
+pub fn prepare_response(status: HttpStatus, content_type: ContentType, body: &str) -> String {
+    match content_type {
+        ContentType::TextPlain | ContentType::OctetStream => {
+            format!(
+                "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+                status,
+                content_type,
+                body.len(),
+                body
+            )
+        }
+        ContentType::Unknown => format!("HTTP/1.1 {}\r\n\r\n", status)
     }
 }
