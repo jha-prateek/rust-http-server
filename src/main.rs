@@ -32,11 +32,13 @@ fn handle_connection(mut stream: TcpStream) {
     let request_context = RequestContext::prepare_request(&mut stream);
     println!("[{}] {}", get_current_time_str(), request_context.request_info());
 
-    let response = match request_context.path.as_str() {
+    // TODO: need better path matching algorithm
+    let response = match request_context.request_info.path.as_str() {
         p if p.contains("/echo") => handle_echo(request_context),
+        p if p.contains("/body") => handle_echo_body(request_context),
         p if p.contains("/user-agent") => handle_user_agent(request_context),
-        p if p.contains("/files") && request_context.method == "GET" => file_get(request_context),
-        p if p.contains("/files") && request_context.method == "POST" => file_post(request_context),
+        p if p.contains("/files") && request_context.request_info.method == "GET" => file_get(request_context),
+        p if p.contains("/files") && request_context.request_info.method == "POST" => file_post(request_context),
         "/" => prepare_response(HttpStatus::Ok, ContentType::Unknown, ""),
         _ => prepare_response(HttpStatus::NotFound, ContentType::Unknown, "")
     };
@@ -130,6 +132,10 @@ fn handle_user_agent(request: RequestContext) -> String {
         None => prepare_response(HttpStatus::BadRequest, ContentType::TextPlain, "header User-Agent not found"),
         Some(_) => prepare_response(HttpStatus::Ok, ContentType::TextPlain, request.headers.get("User-Agent").unwrap())
     }
+}
+
+fn handle_echo_body(request: RequestContext) -> String {
+    prepare_response(HttpStatus::BadRequest, ContentType::TextPlain, request.body.as_str())
 }
 
 fn handle_echo(request: RequestContext) -> String {

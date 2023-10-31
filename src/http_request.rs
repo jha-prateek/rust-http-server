@@ -1,75 +1,90 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use std::ops::Not;
 use std::str::from_utf8;
 
-pub struct RequestContext {
+pub struct RequestInfo {
     pub method: String,
     pub path: String,
-    pub path_params: Vec<String>,
     pub version: String,
+}
+
+impl RequestInfo {
+    fn empty_info() -> RequestInfo {
+        RequestInfo {
+            method: "".to_string(),
+            path: "".to_string(),
+            version: "".to_string(),
+        }
+    }
+}
+
+pub struct RequestContext {
+    pub request_info: RequestInfo,
+    pub path_params: Vec<String>,
     pub headers: HashMap<String, String>,
     pub body: String
 }
 
 impl RequestContext {
+    // Reading from TcpStream: https://thepacketgeek.com/rust/tcpstream/reading-and-writing/
     pub fn prepare_request(mut stream: &TcpStream) -> RequestContext {
-        // let mut buffered_reader = BufReader::new(stream);
-        // let incoming_request_vec = buffered_reader.lines()
-        //     .map(|line| line.unwrap())
-        //     .take_while(|line| line.is_empty().not())
-        //     .collect::<Vec<_>>();
 
-        let read_buffer = &mut [0u8; 1024];
-        stream.read(read_buffer).expect("Unable to read stream");
-        let request = from_utf8(read_buffer).unwrap().trim_matches(char::from(0));
-        let request_parts= request
-            .split("\r\n\r\n").map(|a| a.lines().collect::<Vec<_>>())
-            .collect::<Vec<_>>();
+        let mut buff_reader = BufReader::new(&mut stream);
+        let received: Vec<u8> = buff_reader.fill_buf().unwrap().to_vec();
+        let request_parts = from_utf8(&received).unwrap().split("\r\n\r\n").collect::<Vec<&str>>();
 
-        let header_parts = request_parts[0]
-            .iter()
-            .map(|b| b.to_string())
-            .collect::<Vec<_>>();
+        let header = request_parts[0];
+        let body = request_parts[1].to_string();
 
-        let body = if request_parts[1].is_empty().not() {
-            request_parts[1][0].to_string()
-        } else { String::from("") };
-
-        let start_line = header_parts[0].split_whitespace().collect::<Vec<&str>>();
-        let method = start_line[0].to_string();
-        let path = start_line[1].to_string();
-        let version = start_line[2].to_string();
-
-        let path_params = path.strip_prefix("/").unwrap()
-            .split("/")
-            .skip(1)
-            .map(|p| p.to_string())
-            .collect::<Vec<String>>();
-
+        let mut request_info: RequestInfo = RequestInfo::empty_info();
+        let mut path_params: Vec<String> = Vec::new();
         let mut headers: HashMap<String, String> = HashMap::new();
-        header_parts
-            .iter()
-            .skip(1)
-            .for_each(|line| {
-                let parts = line.split(": ").map(|p| p.trim()).collect::<Vec<&str>>();
+
+        for (pos, h) in header.lines().enumerate() {
+            if pos == 0 {
+                request_info = Self::parse_start_line(h);
+                path_params = Self::parse_path_params(request_info.path.as_str());
+            } else {
+                let parts = h.split(": ").map(|p| p.trim()).collect::<Vec<&str>>();
                 let key = parts[0];
                 let value = parts[1];
                 headers.insert(key.to_string(), value.to_string());
-            });
+            }
+        }
+
+        buff_reader.consume(received.len());
 
         RequestContext {
-            method,
-            path,
+            request_info,
             path_params,
-            version,
             headers,
-            body
+            body,
         }
     }
 
+    fn parse_start_line(line: &str) -> RequestInfo {
+        let start_line = line.split_whitespace().collect::<Vec<&str>>();
+        let method = start_line[0].to_string();
+        let path = start_line[1].to_string();
+        let version = start_line[2].to_string();
+        RequestInfo {
+            method,
+            path,
+            version
+        }
+    }
+
+    // TODO: fix for empty path params and path with multiple tokens
+    fn parse_path_params(path: &str) -> Vec<String> {
+        path.strip_prefix("/").unwrap()
+            .split("/")
+            .skip(1)
+            .map(|p| p.to_string())
+            .collect::<Vec<String>>()
+    }
+
     pub fn request_info(&self) -> String {
-        format!("{} {} {}", self.method, self.path, self.version)
+        format!("{} {} {}", self.request_info.method, self.request_info.path, self.request_info.version)
     }
 }
