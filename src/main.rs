@@ -8,6 +8,8 @@ use std::io::{prelude::*};
 use chrono::Local;
 use crate::http_request::RequestContext;
 use crate::http_utils::{ContentType, HttpStatus, prepare_response};
+use crate::http_utils::ContentType::TextPlain;
+use crate::http_utils::HttpStatus::BadRequest;
 
 fn main() {
     let port = "4222";
@@ -47,7 +49,12 @@ fn handle_connection(mut stream: TcpStream) {
 }
 
 fn file_post(request: RequestContext) -> String {
-    let directory = get_args_value("directory");
+    let directory = match get_args_value("directory") {
+        Ok(d) => d,
+        Err(e) => {
+            return prepare_response(BadRequest, TextPlain, e.as_str())
+        }
+    };
 
     let response: Result<_, String> = if directory.is_empty() {
         let e_msg = format!("argument --directory not found");
@@ -86,7 +93,13 @@ fn file_post(request: RequestContext) -> String {
 }
 
 fn file_get(request: RequestContext) -> String {
-    let directory = get_args_value("directory");
+    let directory = match get_args_value("directory") {
+        Ok(d) => d,
+        Err(e) => {
+            return prepare_response(BadRequest, TextPlain, e.as_str())
+        }
+    };
+
     let response: Result<String, String> = if directory.is_empty() {
         let e_msg = format!("argument --directory not found");
         eprintln!("{}", e_msg);
@@ -131,7 +144,7 @@ fn handle_echo(request: RequestContext) -> String {
     }
 }
 
-fn get_args_value(arg_label: &str) -> String {
+fn get_args_value(arg_label: &str) -> Result<String, String> {
     let args = env::args().collect::<Vec<String>>();
     let arg_value = args.iter()
         .skip(1)
@@ -139,7 +152,11 @@ fn get_args_value(arg_label: &str) -> String {
         .next();
 
     match arg_value {
-        None => "".to_string(),
-        Some(a) => a.to_string()
+        None => {
+            let e_msg = format!("argument --directory not found");
+            eprintln!("{}", e_msg);
+            Err(e_msg)
+        }
+        Some(a) => Ok(a.to_string())
     }
 }
