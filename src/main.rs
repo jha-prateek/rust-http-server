@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::{env, fmt, thread};
 use std::fs::File;
-// Uncomment this block to pass the first stage
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{prelude::*};
 use std::ops::Not;
@@ -10,12 +9,10 @@ use chrono::Local;
 use itertools::Itertools;
 
 fn main() {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    println!("Logs from your program will appear here!");
-
-    // Uncomment this block to pass the first stage
-    //
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
+    let port = "4221";
+    let address = format!("127.0.0.1:{}", port);
+    println!("Starting TCP server on");
+    let listener = TcpListener::bind(address).unwrap();
 
     for stream in listener.incoming() {
         match stream {
