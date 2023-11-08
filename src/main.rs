@@ -10,8 +10,8 @@ use crate::http_utils::{ContentType, get_current_time_str, HttpStatus, log_error
 
 fn main() {
     let port = "4222";
-    let address = format!("127.0.0.1:{}", port);
-    println!("Starting TCP server on {}", address);
+    let address = format!("0.0.0.0:{}", port);
+    println!("Starting server on {}", address);
     let listener = TcpListener::bind(address).unwrap();
 
     for stream in listener.incoming() {
@@ -135,7 +135,7 @@ fn handle_user_agent(request: RequestContext) -> String {
 }
 
 fn handle_echo_body(request: RequestContext) -> String {
-    prepare_response(HttpStatus::BadRequest, ContentType::TextPlain, request.body.as_str())
+    prepare_response(HttpStatus::Ok, ContentType::TextPlain, request.body.as_str())
 }
 
 fn handle_echo(request: RequestContext) -> String {
