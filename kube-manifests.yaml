@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-http-server
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rust-http-server
+  template:
+    metadata:
+      labels:
+        app: rust-http-server
+    spec:
+      containers:
+      - name: rust-http-server
+        image: sudo07/rust-http-server:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rust-http-server
+  namespace: default
+spec:
+  ports:
+  - name: http
+    targetPort: 4222
+    port: 80
+  selector:
+    app: rust-http-server
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rust-http-server
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: rust-http-server
+            port:
+              number: 80
